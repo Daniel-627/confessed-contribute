@@ -1,121 +1,69 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+// src/App.tsx
+import { Routes, Route, Navigate } from 'react-router-dom'
+import { useAuth } from '@clerk/clerk-react'
+import { useEffect, useState } from 'react'
+import { apiFetch } from './lib/api'
+import Navbar from './components/Navbar'
+import Gate from './pages/Gate'
+import Dashboard from './pages/Dashboard'
+import Admin from './pages/Admin'
 
 function App() {
-  const [count, setCount] = useState(0)
+  const { isSignedIn, isLoaded, getToken } = useAuth()
+  const [role, setRole] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!isLoaded) return
+    if (!isSignedIn) { setLoading(false); return }
+
+    getToken()
+      .then(token => apiFetch<{ user: { role: string } }>('/me', token))
+      .then(data => setRole(data.user.role))
+      .catch(() => setRole('regular'))
+      .finally(() => setLoading(false))
+  }, [isLoaded, isSignedIn])
+
+  if (!isLoaded || loading) return <AppLoading />
 
   return (
     <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
+      <Navbar role={role} />
+      <Routes>
+        <Route
+          path="/"
+          element={
+            !isSignedIn ? <Gate signedOut /> :
+            role === 'admin' ? <Navigate to="/admin" replace /> :
+            role === 'contributor' ? <Navigate to="/dashboard" replace /> :
+            <Gate role={role} />
+          }
+        />
+        <Route
+          path="/dashboard"
+          element={role === 'contributor' || role === 'admin' ? <Dashboard role={role!} /> : <Navigate to="/" replace />}
+        />
+        <Route
+          path="/admin"
+          element={role === 'admin' ? <Admin /> : <Navigate to="/" replace />}
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
     </>
+  )
+}
+
+function AppLoading() {
+  return (
+    <div style={{ minHeight: '100vh', background: '#080f1a', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20 }}>
+      <span style={{ fontSize: 28, color: '#C9A94A' }}>✝</span>
+      <div style={{ display: 'flex', gap: 5, alignItems: 'flex-end', height: 20 }}>
+        {[8,14,20,14,8].map((h, i) => (
+          <div key={i} style={{ width: 3, height: h, background: '#C9A94A', borderRadius: 2, animation: 'bar 1.2s ease-in-out infinite', animationDelay: `${i * 0.15}s` }} />
+        ))}
+      </div>
+      <style>{`@keyframes bar { 0%,100%{transform:scaleY(.4);opacity:.3} 50%{transform:scaleY(1);opacity:1} }`}</style>
+    </div>
   )
 }
 

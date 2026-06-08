@@ -1,0 +1,426 @@
+// src/pages/Admin.tsx
+import { useEffect, useState } from 'react'
+import { useAuth } from '@clerk/clerk-react'
+import { apiFetch } from '../lib/api'
+
+type Application = {
+  id: string
+  fullName: string
+  desiredTitle: string
+  bio: string
+  theologicalStatement: string
+  churchName?: string
+  ministryName?: string
+  location?: string
+  writingSamples?: string[]
+  socialLinks?: Record<string, string>
+  submittedAt: string
+  status: string
+}
+
+type User = {
+  id: string
+  email: string
+  displayName?: string
+  role: string
+  isActive: boolean
+  createdAt: string
+}
+
+type Tab = 'applications' | 'users'
+
+export default function Admin() {
+  const { getToken } = useAuth()
+  const [tab, setTab] = useState<Tab>('applications')
+  const [applications, setApplications] = useState<Application[]>([])
+  const [users, setUsers] = useState<User[]>([])
+  const [loading, setLoading] = useState(true)
+  const [selected, setSelected] = useState<Application | null>(null)
+  const [reason, setReason] = useState('')
+  const [actionLoading, setActionLoading] = useState(false)
+  const [toast, setToast] = useState<string | null>(null)
+
+  async function load() {
+    setLoading(true)
+    try {
+      const token = await getToken()
+      if (tab === 'applications') {
+        const data = await apiFetch<{ applications: Application[] }>('/admin/applications', token)
+        setApplications(data.applications)
+      } else {
+        const data = await apiFetch<{ users: User[] }>('/admin/users', token)
+        setUsers(data.users)
+      }
+    } catch (e: any) {
+      showToast('Error: ' + e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { load() }, [tab])
+
+  function showToast(msg: string) {
+    setToast(msg)
+    setTimeout(() => setToast(null), 3500)
+  }
+
+  async function approve(id: string) {
+    setActionLoading(true)
+    try {
+      const token = await getToken()
+      await apiFetch(`/admin/applications/${id}/approve`, token, {
+        method: 'POST',
+        body: JSON.stringify({ reason: reason || null }),
+      })
+      showToast('✓ Application approved')
+      setSelected(null)
+      setReason('')
+      load()
+    } catch (e: any) {
+      showToast('Error: ' + e.message)
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  async function reject(id: string) {
+    if (!reason.trim()) { showToast('Reason is required for rejection'); return }
+    setActionLoading(true)
+    try {
+      const token = await getToken()
+      await apiFetch(`/admin/applications/${id}/reject`, token, {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+      })
+      showToast('Application rejected')
+      setSelected(null)
+      setReason('')
+      load()
+    } catch (e: any) {
+      showToast('Error: ' + e.message)
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  async function suspend(id: string) {
+    if (!confirm('Suspend this user?')) return
+    try {
+      const token = await getToken()
+      await apiFetch(`/admin/users/${id}/suspend`, token, { method: 'PUT' })
+      showToast('User suspended')
+      load()
+    } catch (e: any) {
+      showToast('Error: ' + e.message)
+    }
+  }
+
+  return (
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;1,400&family=Barlow:wght@400;500;600;700&display=swap');
+        *, *::before, *::after { box-sizing: border-box; }
+        .adm {
+          min-height: calc(100vh - 60px);
+          background: #080f1a;
+          font-family: 'Barlow', sans-serif;
+          color: #f0ece0;
+          display: flex;
+          flex-direction: column;
+        }
+        .adm-header {
+          padding: 32px 48px 0;
+          border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .adm-title {
+          font-family: 'EB Garamond', serif;
+          font-size: 28px;
+          color: #f0ece0;
+          margin-bottom: 20px;
+        }
+        .adm-title em { font-style: italic; color: #C9A94A; }
+        .adm-tabs { display: flex; gap: 0; }
+        .adm-tab {
+          padding: 10px 24px;
+          font-size: 12px;
+          font-weight: 600;
+          letter-spacing: .08em;
+          text-transform: uppercase;
+          cursor: pointer;
+          border: none;
+          background: transparent;
+          color: rgba(240,236,224,0.35);
+          border-bottom: 2px solid transparent;
+          transition: all .2s;
+          font-family: 'Barlow', sans-serif;
+        }
+        .adm-tab.active { color: #C9A94A; border-bottom-color: #C9A94A; }
+        .adm-tab:hover { color: rgba(240,236,224,0.7); }
+        .adm-body { flex: 1; padding: 32px 48px; }
+        .adm-empty {
+          text-align: center;
+          padding: 80px 0;
+          font-family: 'EB Garamond', serif;
+          font-size: 18px;
+          font-style: italic;
+          color: rgba(240,236,224,0.2);
+        }
+
+        /* Application cards */
+        .app-list { display: flex; flex-direction: column; gap: 12px; }
+        .app-card {
+          background: #0b1929;
+          border: 1px solid rgba(255,255,255,0.06);
+          border-radius: 10px;
+          padding: 20px 24px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 16px;
+          cursor: pointer;
+          transition: border-color .2s, background .2s;
+        }
+        .app-card:hover { border-color: rgba(201,169,74,0.2); background: #0f2035; }
+        .app-card-left { flex: 1; min-width: 0; }
+        .app-card-name { font-size: 15px; font-weight: 600; color: #f0ece0; margin-bottom: 3px; }
+        .app-card-meta { font-size: 12px; color: rgba(240,236,224,0.35); }
+        .app-card-date { font-size: 11px; color: rgba(240,236,224,0.25); flex-shrink: 0; }
+
+        /* User table */
+        .user-table { width: 100%; border-collapse: collapse; }
+        .user-table th {
+          text-align: left; font-size: 10px; font-weight: 700;
+          letter-spacing: .12em; text-transform: uppercase;
+          color: rgba(240,236,224,0.3); padding: 0 16px 12px; border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+        .user-table td {
+          padding: 14px 16px; font-size: 13px; color: rgba(240,236,224,0.7);
+          border-bottom: 1px solid rgba(255,255,255,0.04);
+        }
+        .user-role {
+          font-size: 9px; font-weight: 700; letter-spacing: .1em;
+          padding: 2px 8px; border-radius: 100px; border: 1px solid; text-transform: uppercase;
+        }
+        .user-role.admin { color: #81c784; border-color: rgba(129,199,132,0.3); }
+        .user-role.contributor { color: #C9A94A; border-color: rgba(201,169,74,0.3); }
+        .user-role.regular { color: rgba(240,236,224,0.35); border-color: rgba(255,255,255,0.1); }
+        .user-status-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+        .user-status-dot.active { background: #81c784; }
+        .user-status-dot.inactive { background: #e57373; }
+        .btn-suspend {
+          background: transparent; border: 1px solid rgba(229,115,115,0.3);
+          color: rgba(229,115,115,0.6); padding: 5px 12px; border-radius: 5px;
+          font-size: 11px; font-weight: 600; cursor: pointer; font-family: 'Barlow', sans-serif;
+          transition: all .2s;
+        }
+        .btn-suspend:hover { border-color: rgba(229,115,115,0.6); color: #e57373; }
+
+        /* Modal */
+        .modal-overlay {
+          position: fixed; inset: 0; z-index: 200;
+          background: rgba(4,13,24,0.92);
+          display: flex; align-items: center; justify-content: center;
+          padding: 24px;
+          backdrop-filter: blur(4px);
+        }
+        .modal {
+          background: #0b1929;
+          border: 1px solid rgba(201,169,74,0.15);
+          border-radius: 14px;
+          width: 100%;
+          max-width: 600px;
+          max-height: 85vh;
+          overflow-y: auto;
+          padding: 32px;
+        }
+        .modal-title { font-family: 'EB Garamond', serif; font-size: 24px; color: #f0ece0; margin-bottom: 4px; }
+        .modal-title em { font-style: italic; color: #C9A94A; }
+        .modal-meta { font-size: 12px; color: rgba(240,236,224,0.35); margin-bottom: 24px; }
+        .modal-section { margin-bottom: 20px; }
+        .modal-label {
+          font-size: 10px; font-weight: 700; letter-spacing: .12em;
+          color: rgba(240,236,224,0.35); text-transform: uppercase; margin-bottom: 6px;
+        }
+        .modal-text {
+          font-size: 14px; color: rgba(240,236,224,0.7); line-height: 1.7;
+          background: rgba(255,255,255,0.03); border-radius: 8px; padding: 12px 14px;
+          border: 1px solid rgba(255,255,255,0.06);
+        }
+        .modal-divider { height: 1px; background: rgba(255,255,255,0.06); margin: 24px 0; }
+        .modal-reason-label { font-size: 12px; font-weight: 600; color: rgba(240,236,224,0.5); margin-bottom: 8px; }
+        .modal-reason {
+          width: 100%; background: #081422; border: 1px solid rgba(255,255,255,0.1);
+          border-radius: 8px; padding: 10px 14px; font-size: 13px; color: #f0ece0;
+          font-family: 'Barlow', sans-serif; resize: vertical; min-height: 80px; outline: none;
+          transition: border-color .2s;
+        }
+        .modal-reason:focus { border-color: rgba(201,169,74,0.4); }
+        .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+        .btn-approve {
+          flex: 1; background: #C9A94A; border: none; color: #080f1a;
+          padding: 11px; border-radius: 8px; font-size: 13px; font-weight: 700;
+          cursor: pointer; font-family: 'Barlow', sans-serif; transition: background .2s;
+        }
+        .btn-approve:hover { background: #b89840; }
+        .btn-approve:disabled { opacity: .5; cursor: not-allowed; }
+        .btn-reject {
+          flex: 1; background: transparent; border: 1px solid rgba(229,115,115,0.3);
+          color: rgba(229,115,115,0.7); padding: 11px; border-radius: 8px;
+          font-size: 13px; font-weight: 600; cursor: pointer; font-family: 'Barlow', sans-serif; transition: all .2s;
+        }
+        .btn-reject:hover { border-color: rgba(229,115,115,0.6); color: #e57373; }
+        .btn-reject:disabled { opacity: .5; cursor: not-allowed; }
+        .btn-cancel {
+          background: transparent; border: 1px solid rgba(255,255,255,0.1);
+          color: rgba(240,236,224,0.45); padding: 11px 20px; border-radius: 8px;
+          font-size: 13px; cursor: pointer; font-family: 'Barlow', sans-serif; transition: all .2s;
+        }
+        .btn-cancel:hover { border-color: rgba(255,255,255,0.2); color: rgba(240,236,224,0.8); }
+
+        /* Toast */
+        .toast {
+          position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%);
+          background: #0f2035; border: 1px solid rgba(201,169,74,0.2);
+          color: #f0ece0; padding: 12px 24px; border-radius: 8px;
+          font-size: 13px; z-index: 300; white-space: nowrap;
+          animation: slideUp .2s ease;
+        }
+        @keyframes slideUp { from { opacity: 0; transform: translateX(-50%) translateY(8px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+
+        @media (max-width: 600px) {
+          .adm-header { padding: 24px 20px 0; }
+          .adm-body { padding: 24px 20px; }
+          .modal { padding: 24px 20px; }
+          .modal-actions { flex-direction: column; }
+        }
+      `}</style>
+
+      <div className="adm">
+        <div className="adm-header">
+          <h1 className="adm-title">Admin <em>Panel</em></h1>
+          <div className="adm-tabs">
+            <button className={`adm-tab${tab === 'applications' ? ' active' : ''}`} onClick={() => setTab('applications')}>
+              Applications {applications.length > 0 && `(${applications.length})`}
+            </button>
+            <button className={`adm-tab${tab === 'users' ? ' active' : ''}`} onClick={() => setTab('users')}>
+              Users
+            </button>
+          </div>
+        </div>
+
+        <div className="adm-body">
+          {loading ? (
+            <div className="adm-empty">Loading...</div>
+          ) : tab === 'applications' ? (
+            applications.length === 0 ? (
+              <div className="adm-empty">No pending applications</div>
+            ) : (
+              <div className="app-list">
+                {applications.map(app => (
+                  <div key={app.id} className="app-card" onClick={() => { setSelected(app); setReason('') }}>
+                    <div className="app-card-left">
+                      <p className="app-card-name">{app.fullName}</p>
+                      <p className="app-card-meta">{app.desiredTitle}{app.churchName ? ` · ${app.churchName}` : ''}{app.location ? ` · ${app.location}` : ''}</p>
+                    </div>
+                    <span className="app-card-date">{new Date(app.submittedAt).toLocaleDateString()}</span>
+                  </div>
+                ))}
+              </div>
+            )
+          ) : (
+            users.length === 0 ? (
+              <div className="adm-empty">No users found</div>
+            ) : (
+              <table className="user-table">
+                <thead>
+                  <tr>
+                    <th>Name / Email</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                    <th>Joined</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map(u => (
+                    <tr key={u.id}>
+                      <td>
+                        <div style={{ fontWeight: 600, color: '#f0ece0' }}>{u.displayName ?? '—'}</div>
+                        <div style={{ fontSize: 11, color: 'rgba(240,236,224,0.3)', marginTop: 2 }}>{u.email}</div>
+                      </td>
+                      <td><span className={`user-role ${u.role}`}>{u.role}</span></td>
+                      <td>
+                        <span className={`user-status-dot ${u.isActive ? 'active' : 'inactive'}`} />
+                        {u.isActive ? 'Active' : 'Suspended'}
+                      </td>
+                      <td>{new Date(u.createdAt).toLocaleDateString()}</td>
+                      <td>
+                        {u.isActive && u.role !== 'admin' && (
+                          <button className="btn-suspend" onClick={() => suspend(u.id)}>Suspend</button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )
+          )}
+        </div>
+      </div>
+
+      {/* Application detail modal */}
+      {selected && (
+        <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setSelected(null) }}>
+          <div className="modal">
+            <h2 className="modal-title"><em>{selected.fullName}</em></h2>
+            <p className="modal-meta">{selected.desiredTitle}{selected.churchName ? ` · ${selected.churchName}` : ''}{selected.location ? ` · ${selected.location}` : ''} · Applied {new Date(selected.submittedAt).toLocaleDateString()}</p>
+
+            <div className="modal-section">
+              <p className="modal-label">Bio</p>
+              <p className="modal-text">{selected.bio}</p>
+            </div>
+
+            <div className="modal-section">
+              <p className="modal-label">Theological Statement</p>
+              <p className="modal-text">{selected.theologicalStatement}</p>
+            </div>
+
+            {selected.writingSamples && selected.writingSamples.length > 0 && (
+              <div className="modal-section">
+                <p className="modal-label">Writing Samples</p>
+                <div className="modal-text">
+                  {selected.writingSamples.map((url, i) => (
+                    <div key={i}><a href={url} target="_blank" rel="noopener" style={{ color: '#C9A94A' }}>{url}</a></div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="modal-divider" />
+
+            <p className="modal-reason-label">Note / Reason <span style={{ color: 'rgba(240,236,224,0.3)', fontWeight: 400 }}>(required for rejection)</span></p>
+            <textarea
+              className="modal-reason"
+              placeholder="Add a note for the applicant..."
+              value={reason}
+              onChange={e => setReason(e.target.value)}
+            />
+
+            <div className="modal-actions">
+              <button className="btn-approve" disabled={actionLoading} onClick={() => approve(selected.id)}>
+                {actionLoading ? 'Processing...' : '✓ Approve'}
+              </button>
+              <button className="btn-reject" disabled={actionLoading} onClick={() => reject(selected.id)}>
+                Reject
+              </button>
+              <button className="btn-cancel" onClick={() => setSelected(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {toast && <div className="toast">{toast}</div>}
+    </>
+  )
+}
