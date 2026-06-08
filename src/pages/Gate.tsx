@@ -6,7 +6,7 @@ type Props = {
   signedOut?: boolean
 }
 
-export default function Gate({ role, signedOut }: Props) {
+export default function Gate({ role: _role, signedOut }: Props) {
   const { openSignIn } = useClerk()
 
   return (

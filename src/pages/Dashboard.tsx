@@ -3,7 +3,7 @@ import { useUser } from '@clerk/clerk-react'
 
 type Props = { role: string }
 
-export default function Dashboard({ role }: Props) {
+export default function Dashboard({ role: _role }: Props) {
   const { user } = useUser()
   const name = user?.firstName ?? 'Contributor'
 
