@@ -16,16 +16,25 @@ function App() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!isLoaded) return
-    if (!isSignedIn) { setLoading(false); return }
+  if (!isLoaded) return
+  if (!isSignedIn) { setLoading(false); return }
 
-    getToken()
-      .then(token => apiFetch<{ user: { role: string } }>('/me', token))
-      .then(data => setRole(data.user.role))
-      .catch(() => setRole('regular'))
-      .finally(() => setLoading(false))
-  }, [isLoaded, isSignedIn])
-
+  getToken()
+    .then(token => {
+      console.log('API_URL:', import.meta.env.VITE_API_URL)
+      console.log('Token:', token?.slice(0, 20))
+      return apiFetch<{ user: { role: string } }>('/me', token)
+    })
+    .then(data => {
+      console.log('Role response:', data)
+      setRole(data.user.role)
+    })
+    .catch((err) => {
+      console.error('ME FETCH ERROR:', err)
+      setRole('regular')
+    })
+    .finally(() => setLoading(false))
+}, [isLoaded, isSignedIn])
   if (!isLoaded || loading) return <AppLoading />
 
   return (
