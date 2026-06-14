@@ -1,13 +1,6 @@
 // src/pages/Gate.tsx
 
-type Props = {
-  role?: string | null
-  signedOut?: boolean
-}
-
-export default function Gate({ role: _role, signedOut }: Props) {
-  const signInUrl = `https://confessed.faith/sign-in?redirect_url=${encodeURIComponent(window.location.href)}`
-
+export default function Gate() {
   return (
     <>
       <style>{`
@@ -98,41 +91,20 @@ export default function Gate({ role: _role, signedOut }: Props) {
         <div className="gate-card">
           <span className="gate-cross">✝</span>
 
-          {signedOut ? (
-            <>
-              <h1 className="gate-title">Welcome to <em>Contribute</em></h1>
-              <p className="gate-sub">
-                This is the Confessed contributor and admin portal.<br />
-                Sign in to continue.
-              </p>
-              <div className="gate-divider" />
-              <div className="gate-actions">
-                <a href={signInUrl} className="gate-btn primary">
-                  Sign in to Confessed
-                </a>
-                <a href="https://confessed.faith" className="gate-btn ghost">
-                  Return to confessed.faith
-                </a>
-              </div>
-            </>
-          ) : (
-            <>
-              <h1 className="gate-title">Access <em>Restricted</em></h1>
-              <p className="gate-sub">
-                You don't have contributor access yet.<br />
-                Apply to become a contributor to access this portal.
-              </p>
-              <div className="gate-divider" />
-              <div className="gate-actions">
-                <a href="https://confessed.faith/apply" className="gate-btn primary">
-                  Apply to become a contributor
-                </a>
-                <a href="https://confessed.faith" className="gate-btn ghost">
-                  Return to confessed.faith
-                </a>
-              </div>
-            </>
-          )}
+          <h1 className="gate-title">Access <em>Restricted</em></h1>
+          <p className="gate-sub">
+            You don't have contributor access yet.<br />
+            Apply to become a contributor to access this portal.
+          </p>
+          <div className="gate-divider" />
+          <div className="gate-actions">
+            <a href="https://confessed.faith/apply" className="gate-btn primary">
+              Apply to become a contributor
+            </a>
+            <a href="https://confessed.faith" className="gate-btn ghost">
+              Return to confessed.faith
+            </a>
+          </div>
 
           <div className="gate-verse">
             "If you confess with your mouth that Jesus is Lord and believe in your heart that God raised him from the dead, you will be saved."

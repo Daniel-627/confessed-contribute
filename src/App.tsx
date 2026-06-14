@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { apiFetch } from './lib/api'
 import Navbar from './components/Navbar'
 import Footer from './components/Footer'
+import SignIn from './pages/SignIn'
 import Gate from './pages/Gate'
 import Dashboard from './pages/Dashboard'
 import Admin from './pages/Admin'
@@ -35,10 +36,10 @@ function App() {
           <Route
             path="/"
             element={
-              !isSignedIn ? <Gate signedOut /> :
+              !isSignedIn ? <SignIn /> :
               role === 'admin' ? <Navigate to="/admin" replace /> :
               role === 'contributor' ? <Navigate to="/dashboard" replace /> :
-              <Gate role={role} />
+              <Gate />
             }
           />
           <Route
