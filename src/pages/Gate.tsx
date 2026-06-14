@@ -1,5 +1,4 @@
 // src/pages/Gate.tsx
-import { useClerk } from '@clerk/clerk-react'
 
 type Props = {
   role?: string | null
@@ -7,7 +6,7 @@ type Props = {
 }
 
 export default function Gate({ role: _role, signedOut }: Props) {
-  const { openSignIn } = useClerk()
+  const signInUrl = `https://confessed.faith/sign-in?redirect_url=${encodeURIComponent(window.location.href)}`
 
   return (
     <>
@@ -71,9 +70,9 @@ export default function Gate({ role: _role, signedOut }: Props) {
           padding: 13px 24px; border-radius: 8px; font-size: 14px;
           font-weight: 600; cursor: pointer; font-family: 'Barlow', sans-serif;
           letter-spacing: .04em; transition: all .2s; text-decoration: none;
-          display: block; text-align: center;
+          display: block; text-align: center; border: none;
         }
-        .gate-btn.primary { background: #C9A94A; color: #080f1a; border: none; }
+        .gate-btn.primary { background: #C9A94A; color: #080f1a; }
         .gate-btn.primary:hover { background: #b89840; }
         .gate-btn.ghost { background: transparent; border: 1px solid rgba(255,255,255,0.12); color: rgba(240,236,224,0.65); }
         .gate-btn.ghost:hover { border-color: rgba(201,169,74,0.3); color: #f0ece0; }
@@ -108,9 +107,9 @@ export default function Gate({ role: _role, signedOut }: Props) {
               </p>
               <div className="gate-divider" />
               <div className="gate-actions">
-                <button className="gate-btn primary" onClick={() => openSignIn()}>
+                <a href={signInUrl} className="gate-btn primary">
                   Sign in to Confessed
-                </button>
+                </a>
                 <a href="https://confessed.faith" className="gate-btn ghost">
                   Return to confessed.faith
                 </a>

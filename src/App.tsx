@@ -4,6 +4,7 @@ import { useAuth } from '@clerk/clerk-react'
 import { useEffect, useState } from 'react'
 import { apiFetch } from './lib/api'
 import Navbar from './components/Navbar'
+import Footer from './components/Footer'
 import Gate from './pages/Gate'
 import Dashboard from './pages/Dashboard'
 import Admin from './pages/Admin'
@@ -27,29 +28,32 @@ function App() {
   if (!isLoaded || loading) return <AppLoading />
 
   return (
-    <>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <Navbar role={role} />
-      <Routes>
-        <Route
-          path="/"
-          element={
-            !isSignedIn ? <Gate signedOut /> :
-            role === 'admin' ? <Navigate to="/admin" replace /> :
-            role === 'contributor' ? <Navigate to="/dashboard" replace /> :
-            <Gate role={role} />
-          }
-        />
-        <Route
-          path="/dashboard"
-          element={role === 'contributor' || role === 'admin' ? <Dashboard role={role!} /> : <Navigate to="/" replace />}
-        />
-        <Route
-          path="/admin"
-          element={role === 'admin' ? <Admin /> : <Navigate to="/" replace />}
-        />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </>
+      <div style={{ flex: 1 }}>
+        <Routes>
+          <Route
+            path="/"
+            element={
+              !isSignedIn ? <Gate signedOut /> :
+              role === 'admin' ? <Navigate to="/admin" replace /> :
+              role === 'contributor' ? <Navigate to="/dashboard" replace /> :
+              <Gate role={role} />
+            }
+          />
+          <Route
+            path="/dashboard"
+            element={role === 'contributor' || role === 'admin' ? <Dashboard role={role!} /> : <Navigate to="/" replace />}
+          />
+          <Route
+            path="/admin"
+            element={role === 'admin' ? <Admin /> : <Navigate to="/" replace />}
+          />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </div>
+      <Footer />
+    </div>
   )
 }
 
