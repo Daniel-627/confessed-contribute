@@ -1,6 +1,6 @@
 // src/pages/Admin.tsx
 import { useEffect, useState } from 'react'
-import { useAuth } from '@clerk/clerk-react'
+import { useAuth, useUser } from '@clerk/clerk-react'
 import { apiFetch } from '../lib/api'
 
 type Application = {
@@ -29,8 +29,11 @@ type User = {
 
 type Tab = 'applications' | 'users'
 
+const ROLES = ['regular', 'contributor', 'admin'] as const
+
 export default function Admin() {
   const { getToken } = useAuth()
+  const { user: currentUser } = useUser()
   const [tab, setTab] = useState<Tab>('applications')
   const [applications, setApplications] = useState<Application[]>([])
   const [users, setUsers] = useState<User[]>([])
@@ -38,6 +41,7 @@ export default function Admin() {
   const [selected, setSelected] = useState<Application | null>(null)
   const [reason, setReason] = useState('')
   const [actionLoading, setActionLoading] = useState(false)
+  const [roleUpdating, setRoleUpdating] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
 
   async function load() {
@@ -116,6 +120,43 @@ export default function Admin() {
     }
   }
 
+  async function reactivate(id: string) {
+    try {
+      const token = await getToken()
+      await apiFetch(`/admin/users/${id}/reactivate`, token, { method: 'PUT' })
+      showToast('User reactivated')
+      load()
+    } catch (e: any) {
+      showToast('Error: ' + e.message)
+    }
+  }
+
+  async function changeRole(id: string, newRole: string, currentRole: string) {
+    if (newRole === currentRole) return
+
+    const isSelf = currentUser?.id && id === (users.find(u => u.id === id)?.id)
+    if (!confirm(`Change this user's role from ${currentRole} to ${newRole}?`)) {
+      load() // reset dropdown to original value
+      return
+    }
+
+    setRoleUpdating(id)
+    try {
+      const token = await getToken()
+      await apiFetch(`/admin/users/${id}/role`, token, {
+        method: 'PUT',
+        body: JSON.stringify({ role: newRole }),
+      })
+      showToast(`✓ Role changed to ${newRole}`)
+      load()
+    } catch (e: any) {
+      showToast('Error: ' + e.message)
+      load() // reset dropdown on error
+    } finally {
+      setRoleUpdating(null)
+    }
+  }
+
   return (
     <>
       <style>{`
@@ -188,33 +229,61 @@ export default function Admin() {
         .app-card-date { font-size: 11px; color: rgba(240,236,224,0.25); flex-shrink: 0; }
 
         /* User table */
-        .user-table { width: 100%; border-collapse: collapse; }
+        .user-table-wrap { overflow-x: auto; }
+        .user-table { width: 100%; border-collapse: collapse; min-width: 640px; }
         .user-table th {
           text-align: left; font-size: 10px; font-weight: 700;
           letter-spacing: .12em; text-transform: uppercase;
           color: rgba(240,236,224,0.3); padding: 0 16px 12px; border-bottom: 1px solid rgba(255,255,255,0.06);
+          white-space: nowrap;
         }
         .user-table td {
           padding: 14px 16px; font-size: 13px; color: rgba(240,236,224,0.7);
           border-bottom: 1px solid rgba(255,255,255,0.04);
+          vertical-align: middle;
         }
-        .user-role {
+
+        /* Role select styled like a badge */
+        .role-select {
           font-size: 9px; font-weight: 700; letter-spacing: .1em;
-          padding: 2px 8px; border-radius: 100px; border: 1px solid; text-transform: uppercase;
+          padding: 4px 10px 4px 10px; border-radius: 100px; border: 1px solid;
+          text-transform: uppercase; font-family: 'Barlow', sans-serif;
+          background: transparent; cursor: pointer; appearance: none;
+          -webkit-appearance: none;
+          transition: opacity .2s;
         }
-        .user-role.admin { color: #81c784; border-color: rgba(129,199,132,0.3); }
-        .user-role.contributor { color: #C9A94A; border-color: rgba(201,169,74,0.3); }
-        .user-role.regular { color: rgba(240,236,224,0.35); border-color: rgba(255,255,255,0.1); }
+        .role-select:disabled { opacity: 0.5; cursor: wait; }
+        .role-select option {
+          background: #0b1929; color: #f0ece0; font-weight: 600;
+        }
+        .role-select.admin { color: #81c784; border-color: rgba(129,199,132,0.3); }
+        .role-select.contributor { color: #C9A94A; border-color: rgba(201,169,74,0.3); }
+        .role-select.regular { color: rgba(240,236,224,0.5); border-color: rgba(255,255,255,0.15); }
+
         .user-status-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; margin-right: 6px; }
         .user-status-dot.active { background: #81c784; }
         .user-status-dot.inactive { background: #e57373; }
+
         .btn-suspend {
           background: transparent; border: 1px solid rgba(229,115,115,0.3);
           color: rgba(229,115,115,0.6); padding: 5px 12px; border-radius: 5px;
           font-size: 11px; font-weight: 600; cursor: pointer; font-family: 'Barlow', sans-serif;
-          transition: all .2s;
+          transition: all .2s; white-space: nowrap;
         }
         .btn-suspend:hover { border-color: rgba(229,115,115,0.6); color: #e57373; }
+
+        .btn-reactivate {
+          background: transparent; border: 1px solid rgba(129,199,132,0.3);
+          color: rgba(129,199,132,0.6); padding: 5px 12px; border-radius: 5px;
+          font-size: 11px; font-weight: 600; cursor: pointer; font-family: 'Barlow', sans-serif;
+          transition: all .2s; white-space: nowrap;
+        }
+        .btn-reactivate:hover { border-color: rgba(129,199,132,0.6); color: #81c784; }
+
+        .self-tag {
+          font-size: 9px; font-weight: 600; letter-spacing: .08em;
+          color: rgba(240,236,224,0.25); text-transform: uppercase;
+        }
 
         /* Modal */
         .modal-overlay {
@@ -332,38 +401,63 @@ export default function Admin() {
             users.length === 0 ? (
               <div className="adm-empty">No users found</div>
             ) : (
-              <table className="user-table">
-                <thead>
-                  <tr>
-                    <th>Name / Email</th>
-                    <th>Role</th>
-                    <th>Status</th>
-                    <th>Joined</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map(u => (
-                    <tr key={u.id}>
-                      <td>
-                        <div style={{ fontWeight: 600, color: '#f0ece0' }}>{u.displayName ?? '—'}</div>
-                        <div style={{ fontSize: 11, color: 'rgba(240,236,224,0.3)', marginTop: 2 }}>{u.email}</div>
-                      </td>
-                      <td><span className={`user-role ${u.role}`}>{u.role}</span></td>
-                      <td>
-                        <span className={`user-status-dot ${u.isActive ? 'active' : 'inactive'}`} />
-                        {u.isActive ? 'Active' : 'Suspended'}
-                      </td>
-                      <td>{new Date(u.createdAt).toLocaleDateString()}</td>
-                      <td>
-                        {u.isActive && u.role !== 'admin' && (
-                          <button className="btn-suspend" onClick={() => suspend(u.id)}>Suspend</button>
-                        )}
-                      </td>
+              <div className="user-table-wrap">
+                <table className="user-table">
+                  <thead>
+                    <tr>
+                      <th>Name / Email</th>
+                      <th>Role</th>
+                      <th>Status</th>
+                      <th>Joined</th>
+                      <th></th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {users.map(u => {
+                      const isSelf = u.id === currentUser?.publicMetadata?.dbId || u.email === currentUser?.primaryEmailAddress?.emailAddress
+                      return (
+                        <tr key={u.id}>
+                          <td>
+                            <div style={{ fontWeight: 600, color: '#f0ece0' }}>{u.displayName ?? '—'}</div>
+                            <div style={{ fontSize: 11, color: 'rgba(240,236,224,0.3)', marginTop: 2 }}>{u.email}</div>
+                          </td>
+                          <td>
+                            {isSelf ? (
+                              <span className={`role-select ${u.role}`} style={{ cursor: 'default' }}>{u.role}</span>
+                            ) : (
+                              <select
+                                title={`Change role for ${u.displayName ?? u.email}`}
+                                className={`role-select ${u.role}`}
+                                value={u.role}
+                                disabled={roleUpdating === u.id}
+                                onChange={(e) => changeRole(u.id, e.target.value, u.role)}
+                              >
+                                {ROLES.map(r => (
+                                  <option key={r} value={r}>{r}</option>
+                                ))}
+                              </select>
+                            )}
+                          </td>
+                          <td>
+                            <span className={`user-status-dot ${u.isActive ? 'active' : 'inactive'}`} />
+                            {u.isActive ? 'Active' : 'Suspended'}
+                          </td>
+                          <td>{new Date(u.createdAt).toLocaleDateString()}</td>
+                          <td>
+                            {isSelf ? (
+                              <span className="self-tag">You</span>
+                            ) : u.isActive ? (
+                              <button className="btn-suspend" onClick={() => suspend(u.id)}>Suspend</button>
+                            ) : (
+                              <button className="btn-reactivate" onClick={() => reactivate(u.id)}>Reactivate</button>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
             )
           )}
         </div>
