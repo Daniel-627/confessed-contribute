@@ -132,10 +132,9 @@ export default function Admin() {
   }
 
   async function changeRole(id: string, newRole: string, currentRole: string) {
-    if (newRole === currentRole) return
+  if (newRole === currentRole) return
 
-    const isSelf = currentUser?.id && id === (users.find(u => u.id === id)?.id)
-    if (!confirm(`Change this user's role from ${currentRole} to ${newRole}?`)) {
+  if (!confirm(`Change this user's role from ${currentRole} to ${newRole}?`)) {
       load() // reset dropdown to original value
       return
     }
