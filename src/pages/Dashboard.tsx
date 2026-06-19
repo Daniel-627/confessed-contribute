@@ -1,11 +1,20 @@
 // src/pages/Dashboard.tsx
 import { useUser } from '@clerk/clerk-react'
+import { useNavigate } from 'react-router-dom'
 
 type Props = { role: string }
 
 export default function Dashboard({ role: _role }: Props) {
   const { user } = useUser()
   const name = user?.firstName ?? 'Contributor'
+  const navigate = useNavigate()
+
+  const cards = [
+    { icon: '✍', label: 'Articles', val: 'Write & publish', route: '/dashboard/articles' },
+    { icon: '🎙', label: 'Podcasts', val: 'Upload audio',    route: null },
+    { icon: '👤', label: 'Profile',  val: 'Manage your profile', route: null },
+    { icon: '📊', label: 'Analytics', val: 'View your reach', route: null },
+  ]
 
   return (
     <>
@@ -58,8 +67,12 @@ export default function Dashboard({ role: _role }: Props) {
           padding: 28px 24px;
           text-align: center;
           transition: background .2s;
+          cursor: default;
         }
-        .dash-card:hover { background: #0f2035; }
+        .dash-card.dash-card--active {
+          cursor: pointer;
+        }
+        .dash-card.dash-card--active:hover { background: #0f2035; }
         .dash-card-icon { font-size: 20px; color: #C9A94A; display: block; margin-bottom: 8px; }
         .dash-card-label { font-size: 10px; font-weight: 700; letter-spacing: .14em; color: rgba(240,236,224,0.35); text-transform: uppercase; margin-bottom: 4px; }
         .dash-card-val { font-family: 'EB Garamond', serif; font-size: 14px; color: rgba(240,236,224,0.5); font-style: italic; }
@@ -68,26 +81,33 @@ export default function Dashboard({ role: _role }: Props) {
           color: rgba(201,169,74,0.4); border: 1px solid rgba(201,169,74,0.15);
           padding: 2px 8px; border-radius: 100px; display: inline-block; margin-top: 6px;
         }
+        .dash-open {
+          font-size: 9px; font-weight: 600; letter-spacing: .1em;
+          color: #C9A94A; border: 1px solid rgba(201,169,74,0.35);
+          padding: 2px 8px; border-radius: 100px; display: inline-block; margin-top: 6px;
+        }
         @media (max-width: 480px) { .dash-cards { grid-template-columns: 1fr; } }
       `}</style>
 
       <div className="dash">
         <div className="dash-inner">
           <h1 className="dash-greeting">Welcome, <em>{name}</em></h1>
-          <p className="dash-sub">Your contributor dashboard is being prepared.</p>
+          <p className="dash-sub">Your contributor dashboard.</p>
 
           <div className="dash-cards">
-            {[
-              { icon: '✍', label: 'Articles', val: 'Write & publish' },
-              { icon: '🎙', label: 'Podcasts', val: 'Upload audio' },
-              { icon: '👤', label: 'Profile', val: 'Manage your profile' },
-              { icon: '📊', label: 'Analytics', val: 'View your reach' },
-            ].map(c => (
-              <div key={c.label} className="dash-card">
+            {cards.map(c => (
+              <div
+                key={c.label}
+                className={`dash-card${c.route ? ' dash-card--active' : ''}`}
+                onClick={() => c.route && navigate(c.route)}
+              >
                 <span className="dash-card-icon">{c.icon}</span>
                 <p className="dash-card-label">{c.label}</p>
                 <p className="dash-card-val">{c.val}</p>
-                <span className="dash-coming">Coming soon</span>
+                {c.route
+                  ? <span className="dash-open">Open →</span>
+                  : <span className="dash-coming">Coming soon</span>
+                }
               </div>
             ))}
           </div>

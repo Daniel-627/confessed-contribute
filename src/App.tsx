@@ -9,6 +9,8 @@ import SignIn from './pages/SignIn'
 import Gate from './pages/Gate'
 import Dashboard from './pages/Dashboard'
 import Admin from './pages/Admin'
+import ArticlesPage from './pages/ArticlesPage'   // ← new
+import ArticleEditor from './pages/ArticleEditor' // ← new
 
 function App() {
   const { isSignedIn, isLoaded, getToken } = useAuth()
@@ -16,26 +18,30 @@ function App() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-  if (!isLoaded) return
-  if (!isSignedIn) { setLoading(false); return }
+    if (!isLoaded) return
+    if (!isSignedIn) { setLoading(false); return }
 
-  getToken()
-    .then(token => {
-      console.log('API_URL:', import.meta.env.VITE_API_URL)
-      console.log('Token:', token?.slice(0, 20))
-      return apiFetch<{ user: { role: string } }>('/me', token)
-    })
-    .then(data => {
-      console.log('Role response:', data)
-      setRole(data.user.role)
-    })
-    .catch((err) => {
-      console.error('ME FETCH ERROR:', err)
-      setRole('regular')
-    })
-    .finally(() => setLoading(false))
-}, [isLoaded, isSignedIn])
+    getToken()
+      .then(token => {
+        console.log('API_URL:', import.meta.env.VITE_API_URL)
+        console.log('Token:', token?.slice(0, 20))
+        return apiFetch<{ user: { role: string } }>('/me', token)
+      })
+      .then(data => {
+        console.log('Role response:', data)
+        setRole(data.user.role)
+      })
+      .catch((err) => {
+        console.error('ME FETCH ERROR:', err)
+        setRole('regular')
+      })
+      .finally(() => setLoading(false))
+  }, [isLoaded, isSignedIn])
+
   if (!isLoaded || loading) return <AppLoading />
+
+  // Contributor or admin — used to guard the article routes
+  const canWrite = role === 'contributor' || role === 'admin'
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
@@ -53,8 +59,24 @@ function App() {
           />
           <Route
             path="/dashboard"
-            element={role === 'contributor' || role === 'admin' ? <Dashboard role={role!} /> : <Navigate to="/" replace />}
+            element={canWrite ? <Dashboard role={role!} /> : <Navigate to="/" replace />}
           />
+
+          {/* ── Article routes ───────────────────────────────────────── */}
+          <Route
+            path="/dashboard/articles"
+            element={canWrite ? <ArticlesPage /> : <Navigate to="/" replace />}
+          />
+          <Route
+            path="/dashboard/articles/new"
+            element={canWrite ? <ArticleEditor /> : <Navigate to="/" replace />}
+          />
+          <Route
+            path="/dashboard/articles/:id/edit"
+            element={canWrite ? <ArticleEditor /> : <Navigate to="/" replace />}
+          />
+          {/* ─────────────────────────────────────────────────────────── */}
+
           <Route
             path="/admin"
             element={role === 'admin' ? <Admin /> : <Navigate to="/" replace />}
