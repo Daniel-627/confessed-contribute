@@ -27,22 +27,52 @@ type User = {
   createdAt: string
 }
 
-type Tab = 'applications' | 'users'
+type ArticleStatus = 'draft' | 'published' | 'suspended' | 'archived'
+
+type Article = {
+  id: string
+  title: string
+  slug: string
+  status: ArticleStatus
+  authorId: string
+  seriesId: string | null
+  readingTimeMinutes: number | null
+  publishedAt: string | null
+  createdAt: string
+  suspensionReason: string | null
+}
+
+type Tab = 'applications' | 'users' | 'articles'
 
 const ROLES = ['regular', 'contributor', 'admin'] as const
+
+const STATUS_META: Record<ArticleStatus, { label: string; color: string; border: string }> = {
+  draft:     { label: 'Draft',     color: 'rgba(240,236,224,0.45)', border: 'rgba(240,236,224,0.12)' },
+  published: { label: 'Published', color: '#81c784',                border: 'rgba(129,199,132,0.3)'  },
+  suspended: { label: 'Suspended', color: '#e57373',                border: 'rgba(229,115,115,0.3)'  },
+  archived:  { label: 'Archived',  color: 'rgba(240,236,224,0.3)',  border: 'rgba(240,236,224,0.08)' },
+}
 
 export default function Admin() {
   const { getToken } = useAuth()
   const { user: currentUser } = useUser()
   const [tab, setTab] = useState<Tab>('applications')
+
   const [applications, setApplications] = useState<Application[]>([])
-  const [users, setUsers] = useState<User[]>([])
-  const [loading, setLoading] = useState(true)
-  const [selected, setSelected] = useState<Application | null>(null)
-  const [reason, setReason] = useState('')
+  const [users,        setUsers]        = useState<User[]>([])
+  const [articles,     setArticles]     = useState<Article[]>([])
+
+  const [loading,       setLoading]       = useState(true)
+  const [selected,      setSelected]      = useState<Application | null>(null)
+  const [reason,        setReason]        = useState('')
   const [actionLoading, setActionLoading] = useState(false)
-  const [roleUpdating, setRoleUpdating] = useState<string | null>(null)
-  const [toast, setToast] = useState<string | null>(null)
+  const [roleUpdating,  setRoleUpdating]  = useState<string | null>(null)
+  const [toast,         setToast]         = useState<string | null>(null)
+
+  // Suspend article modal
+  const [suspendTarget,  setSuspendTarget]  = useState<Article | null>(null)
+  const [suspendReason,  setSuspendReason]  = useState('')
+  const [suspendLoading, setSuspendLoading] = useState(false)
 
   async function load() {
     setLoading(true)
@@ -51,9 +81,12 @@ export default function Admin() {
       if (tab === 'applications') {
         const data = await apiFetch<{ applications: Application[] }>('/admin/applications', token)
         setApplications(data.applications)
-      } else {
+      } else if (tab === 'users') {
         const data = await apiFetch<{ users: User[] }>('/admin/users', token)
         setUsers(data.users)
+      } else {
+        const data = await apiFetch<{ articles: Article[] }>('/admin/articles', token)
+        setArticles(data.articles)
       }
     } catch (e: any) {
       showToast('Error: ' + e.message)
@@ -69,6 +102,8 @@ export default function Admin() {
     setTimeout(() => setToast(null), 3500)
   }
 
+  // ── Application actions ──────────────────────────────────────────────────
+
   async function approve(id: string) {
     setActionLoading(true)
     try {
@@ -77,7 +112,7 @@ export default function Admin() {
         method: 'POST',
         body: JSON.stringify({ reason: reason || null }),
       })
-      showToast('✓ Application approved')
+      showToast('Application approved')
       setSelected(null)
       setReason('')
       load()
@@ -108,6 +143,8 @@ export default function Admin() {
     }
   }
 
+  // ── User actions ─────────────────────────────────────────────────────────
+
   async function suspend(id: string) {
     if (!confirm('Suspend this user?')) return
     try {
@@ -132,13 +169,11 @@ export default function Admin() {
   }
 
   async function changeRole(id: string, newRole: string, currentRole: string) {
-  if (newRole === currentRole) return
-
-  if (!confirm(`Change this user's role from ${currentRole} to ${newRole}?`)) {
-      load() // reset dropdown to original value
+    if (newRole === currentRole) return
+    if (!confirm(`Change this user's role from ${currentRole} to ${newRole}?`)) {
+      load()
       return
     }
-
     setRoleUpdating(id)
     try {
       const token = await getToken()
@@ -146,15 +181,51 @@ export default function Admin() {
         method: 'PUT',
         body: JSON.stringify({ role: newRole }),
       })
-      showToast(`✓ Role changed to ${newRole}`)
+      showToast(`Role changed to ${newRole}`)
       load()
     } catch (e: any) {
       showToast('Error: ' + e.message)
-      load() // reset dropdown on error
+      load()
     } finally {
       setRoleUpdating(null)
     }
   }
+
+  // ── Article actions ──────────────────────────────────────────────────────
+
+  async function suspendArticle() {
+    if (!suspendTarget) return
+    setSuspendLoading(true)
+    try {
+      const token = await getToken()
+      await apiFetch(`/admin/articles/${suspendTarget.id}/suspend`, token, {
+        method: 'PUT',
+        body: JSON.stringify({ reason: suspendReason || null }),
+      })
+      showToast('Article suspended')
+      setSuspendTarget(null)
+      setSuspendReason('')
+      load()
+    } catch (e: any) {
+      showToast('Error: ' + e.message)
+    } finally {
+      setSuspendLoading(false)
+    }
+  }
+
+  async function reinstateArticle(id: string, title: string) {
+    if (!confirm(`Reinstate "${title}"?`)) return
+    try {
+      const token = await getToken()
+      await apiFetch(`/admin/articles/${id}/reinstate`, token, { method: 'PUT' })
+      showToast('Article reinstated')
+      load()
+    } catch (e: any) {
+      showToast('Error: ' + e.message)
+    }
+  }
+
+  // ── Render ───────────────────────────────────────────────────────────────
 
   return (
     <>
@@ -233,7 +304,8 @@ export default function Admin() {
         .user-table th {
           text-align: left; font-size: 10px; font-weight: 700;
           letter-spacing: .12em; text-transform: uppercase;
-          color: rgba(240,236,224,0.3); padding: 0 16px 12px; border-bottom: 1px solid rgba(255,255,255,0.06);
+          color: rgba(240,236,224,0.3); padding: 0 16px 12px;
+          border-bottom: 1px solid rgba(255,255,255,0.06);
           white-space: nowrap;
         }
         .user-table td {
@@ -242,40 +314,39 @@ export default function Admin() {
           vertical-align: middle;
         }
 
-        /* Role select styled like a badge */
         .role-select {
           font-size: 9px; font-weight: 700; letter-spacing: .1em;
-          padding: 4px 10px 4px 10px; border-radius: 100px; border: 1px solid;
+          padding: 4px 10px; border-radius: 100px; border: 1px solid;
           text-transform: uppercase; font-family: 'Barlow', sans-serif;
           background: transparent; cursor: pointer; appearance: none;
-          -webkit-appearance: none;
-          transition: opacity .2s;
+          -webkit-appearance: none; transition: opacity .2s;
         }
         .role-select:disabled { opacity: 0.5; cursor: wait; }
-        .role-select option {
-          background: #0b1929; color: #f0ece0; font-weight: 600;
-        }
-        .role-select.admin { color: #81c784; border-color: rgba(129,199,132,0.3); }
+        .role-select option { background: #0b1929; color: #f0ece0; font-weight: 600; }
+        .role-select.admin       { color: #81c784; border-color: rgba(129,199,132,0.3); }
         .role-select.contributor { color: #C9A94A; border-color: rgba(201,169,74,0.3); }
-        .role-select.regular { color: rgba(240,236,224,0.5); border-color: rgba(255,255,255,0.15); }
+        .role-select.regular     { color: rgba(240,236,224,0.5); border-color: rgba(255,255,255,0.15); }
 
-        .user-status-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; margin-right: 6px; }
-        .user-status-dot.active { background: #81c784; }
+        .user-status-dot {
+          width: 6px; height: 6px; border-radius: 50%;
+          display: inline-block; margin-right: 6px;
+        }
+        .user-status-dot.active   { background: #81c784; }
         .user-status-dot.inactive { background: #e57373; }
 
         .btn-suspend {
           background: transparent; border: 1px solid rgba(229,115,115,0.3);
           color: rgba(229,115,115,0.6); padding: 5px 12px; border-radius: 5px;
-          font-size: 11px; font-weight: 600; cursor: pointer; font-family: 'Barlow', sans-serif;
-          transition: all .2s; white-space: nowrap;
+          font-size: 11px; font-weight: 600; cursor: pointer;
+          font-family: 'Barlow', sans-serif; transition: all .2s; white-space: nowrap;
         }
         .btn-suspend:hover { border-color: rgba(229,115,115,0.6); color: #e57373; }
 
         .btn-reactivate {
           background: transparent; border: 1px solid rgba(129,199,132,0.3);
           color: rgba(129,199,132,0.6); padding: 5px 12px; border-radius: 5px;
-          font-size: 11px; font-weight: 600; cursor: pointer; font-family: 'Barlow', sans-serif;
-          transition: all .2s; white-space: nowrap;
+          font-size: 11px; font-weight: 600; cursor: pointer;
+          font-family: 'Barlow', sans-serif; transition: all .2s; white-space: nowrap;
         }
         .btn-reactivate:hover { border-color: rgba(129,199,132,0.6); color: #81c784; }
 
@@ -284,7 +355,39 @@ export default function Admin() {
           color: rgba(240,236,224,0.25); text-transform: uppercase;
         }
 
-        /* Modal */
+        /* Article table */
+        .art-table-wrap { overflow-x: auto; }
+        .art-table { width: 100%; border-collapse: collapse; min-width: 680px; }
+        .art-table th {
+          text-align: left; font-size: 10px; font-weight: 700;
+          letter-spacing: .12em; text-transform: uppercase;
+          color: rgba(240,236,224,0.3); padding: 0 16px 12px;
+          border-bottom: 1px solid rgba(255,255,255,0.06);
+          white-space: nowrap;
+        }
+        .art-table td {
+          padding: 14px 16px; font-size: 13px; color: rgba(240,236,224,0.7);
+          border-bottom: 1px solid rgba(255,255,255,0.04);
+          vertical-align: middle;
+        }
+        .art-title {
+          font-weight: 600; color: #f0ece0;
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+          max-width: 320px; display: block;
+        }
+        .art-status-badge {
+          font-size: 9px; font-weight: 700; letter-spacing: .1em;
+          text-transform: uppercase; padding: 3px 9px; border-radius: 100px;
+          border: 1px solid; white-space: nowrap;
+        }
+        .art-reason {
+          font-size: 11px; color: rgba(229,115,115,0.6);
+          max-width: 200px; white-space: nowrap;
+          overflow: hidden; text-overflow: ellipsis;
+          display: block; margin-top: 2px;
+        }
+
+        /* Modals */
         .modal-overlay {
           position: fixed; inset: 0; z-index: 200;
           background: rgba(4,13,24,0.92);
@@ -296,10 +399,8 @@ export default function Admin() {
           background: #0b1929;
           border: 1px solid rgba(201,169,74,0.15);
           border-radius: 14px;
-          width: 100%;
-          max-width: 600px;
-          max-height: 85vh;
-          overflow-y: auto;
+          width: 100%; max-width: 600px;
+          max-height: 85vh; overflow-y: auto;
           padding: 32px;
         }
         .modal-title { font-family: 'EB Garamond', serif; font-size: 24px; color: #f0ece0; margin-bottom: 4px; }
@@ -320,8 +421,8 @@ export default function Admin() {
         .modal-reason {
           width: 100%; background: #081422; border: 1px solid rgba(255,255,255,0.1);
           border-radius: 8px; padding: 10px 14px; font-size: 13px; color: #f0ece0;
-          font-family: 'Barlow', sans-serif; resize: vertical; min-height: 80px; outline: none;
-          transition: border-color .2s;
+          font-family: 'Barlow', sans-serif; resize: vertical; min-height: 80px;
+          outline: none; transition: border-color .2s;
         }
         .modal-reason:focus { border-color: rgba(201,169,74,0.4); }
         .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
@@ -335,7 +436,8 @@ export default function Admin() {
         .btn-reject {
           flex: 1; background: transparent; border: 1px solid rgba(229,115,115,0.3);
           color: rgba(229,115,115,0.7); padding: 11px; border-radius: 8px;
-          font-size: 13px; font-weight: 600; cursor: pointer; font-family: 'Barlow', sans-serif; transition: all .2s;
+          font-size: 13px; font-weight: 600; cursor: pointer;
+          font-family: 'Barlow', sans-serif; transition: all .2s;
         }
         .btn-reject:hover { border-color: rgba(229,115,115,0.6); color: #e57373; }
         .btn-reject:disabled { opacity: .5; cursor: not-allowed; }
@@ -354,12 +456,16 @@ export default function Admin() {
           font-size: 13px; z-index: 300; white-space: nowrap;
           animation: slideUp .2s ease;
         }
-        @keyframes slideUp { from { opacity: 0; transform: translateX(-50%) translateY(8px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+        @keyframes slideUp {
+          from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+          to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
 
-        @media (max-width: 600px) {
+        @media (max-width: 768px) {
           .adm-header { padding: 24px 20px 0; }
-          .adm-body { padding: 24px 20px; }
-          .modal { padding: 24px 20px; }
+          .adm-body   { padding: 24px 20px; }
+          .adm-tab    { padding: 10px 14px; font-size: 11px; letter-spacing: .05em; }
+          .modal      { padding: 24px 20px; }
           .modal-actions { flex-direction: column; }
         }
       `}</style>
@@ -368,35 +474,59 @@ export default function Admin() {
         <div className="adm-header">
           <h1 className="adm-title">Admin <em>Panel</em></h1>
           <div className="adm-tabs">
-            <button className={`adm-tab${tab === 'applications' ? ' active' : ''}`} onClick={() => setTab('applications')}>
-              Applications {applications.length > 0 && `(${applications.length})`}
+            <button
+              className={`adm-tab${tab === 'applications' ? ' active' : ''}`}
+              onClick={() => setTab('applications')}
+            >
+              Applications{applications.length > 0 ? ` (${applications.length})` : ''}
             </button>
-            <button className={`adm-tab${tab === 'users' ? ' active' : ''}`} onClick={() => setTab('users')}>
+            <button
+              className={`adm-tab${tab === 'users' ? ' active' : ''}`}
+              onClick={() => setTab('users')}
+            >
               Users
+            </button>
+            <button
+              className={`adm-tab${tab === 'articles' ? ' active' : ''}`}
+              onClick={() => setTab('articles')}
+            >
+              Articles
             </button>
           </div>
         </div>
 
         <div className="adm-body">
           {loading ? (
-            <div className="adm-empty">Loading...</div>
+            <div className="adm-empty">Loading…</div>
+
           ) : tab === 'applications' ? (
             applications.length === 0 ? (
               <div className="adm-empty">No pending applications</div>
             ) : (
               <div className="app-list">
                 {applications.map(app => (
-                  <div key={app.id} className="app-card" onClick={() => { setSelected(app); setReason('') }}>
+                  <div
+                    key={app.id}
+                    className="app-card"
+                    onClick={() => { setSelected(app); setReason('') }}
+                  >
                     <div className="app-card-left">
                       <p className="app-card-name">{app.fullName}</p>
-                      <p className="app-card-meta">{app.desiredTitle}{app.churchName ? ` · ${app.churchName}` : ''}{app.location ? ` · ${app.location}` : ''}</p>
+                      <p className="app-card-meta">
+                        {app.desiredTitle}
+                        {app.churchName ? ` · ${app.churchName}` : ''}
+                        {app.location   ? ` · ${app.location}`   : ''}
+                      </p>
                     </div>
-                    <span className="app-card-date">{new Date(app.submittedAt).toLocaleDateString()}</span>
+                    <span className="app-card-date">
+                      {new Date(app.submittedAt).toLocaleDateString()}
+                    </span>
                   </div>
                 ))}
               </div>
             )
-          ) : (
+
+          ) : tab === 'users' ? (
             users.length === 0 ? (
               <div className="adm-empty">No users found</div>
             ) : (
@@ -413,7 +543,9 @@ export default function Admin() {
                   </thead>
                   <tbody>
                     {users.map(u => {
-                      const isSelf = u.id === currentUser?.publicMetadata?.dbId || u.email === currentUser?.primaryEmailAddress?.emailAddress
+                      const isSelf =
+                        u.id    === currentUser?.publicMetadata?.dbId ||
+                        u.email === currentUser?.primaryEmailAddress?.emailAddress
                       return (
                         <tr key={u.id}>
                           <td>
@@ -429,11 +561,9 @@ export default function Admin() {
                                 className={`role-select ${u.role}`}
                                 value={u.role}
                                 disabled={roleUpdating === u.id}
-                                onChange={(e) => changeRole(u.id, e.target.value, u.role)}
+                                onChange={e => changeRole(u.id, e.target.value, u.role)}
                               >
-                                {ROLES.map(r => (
-                                  <option key={r} value={r}>{r}</option>
-                                ))}
+                                {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
                               </select>
                             )}
                           </td>
@@ -458,16 +588,92 @@ export default function Admin() {
                 </table>
               </div>
             )
+
+          ) : (
+            // ── Articles tab ───────────────────────────────────────────────
+            articles.length === 0 ? (
+              <div className="adm-empty">No articles yet</div>
+            ) : (
+              <div className="art-table-wrap">
+                <table className="art-table">
+                  <thead>
+                    <tr>
+                      <th>Title</th>
+                      <th>Status</th>
+                      <th>Published</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {articles.map(a => {
+                      const s = STATUS_META[a.status]
+                      return (
+                        <tr key={a.id}>
+                          <td>
+                            <span className="art-title">{a.title}</span>
+                          </td>
+                          <td>
+                            <span
+                              className="art-status-badge"
+                              style={{ color: s.color, borderColor: s.border }}
+                            >
+                              {s.label}
+                            </span>
+                            {a.status === 'suspended' && a.suspensionReason && (
+                              <span className="art-reason" title={a.suspensionReason}>
+                                {a.suspensionReason}
+                              </span>
+                            )}
+                          </td>
+                          <td style={{ color: 'rgba(240,236,224,0.3)', fontSize: 12 }}>
+                            {a.publishedAt
+                              ? new Date(a.publishedAt).toLocaleDateString('en-GB', {
+                                  day: 'numeric', month: 'short', year: 'numeric',
+                                })
+                              : '—'}
+                          </td>
+                          <td>
+                            {a.status === 'suspended' ? (
+                              <button
+                                className="btn-reactivate"
+                                onClick={() => reinstateArticle(a.id, a.title)}
+                              >
+                                Reinstate
+                              </button>
+                            ) : a.status === 'published' ? (
+                              <button
+                                className="btn-suspend"
+                                onClick={() => { setSuspendTarget(a); setSuspendReason('') }}
+                              >
+                                Suspend
+                              </button>
+                            ) : null}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )
           )}
         </div>
       </div>
 
       {/* Application detail modal */}
       {selected && (
-        <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setSelected(null) }}>
+        <div
+          className="modal-overlay"
+          onClick={e => { if (e.target === e.currentTarget) setSelected(null) }}
+        >
           <div className="modal">
             <h2 className="modal-title"><em>{selected.fullName}</em></h2>
-            <p className="modal-meta">{selected.desiredTitle}{selected.churchName ? ` · ${selected.churchName}` : ''}{selected.location ? ` · ${selected.location}` : ''} · Applied {new Date(selected.submittedAt).toLocaleDateString()}</p>
+            <p className="modal-meta">
+              {selected.desiredTitle}
+              {selected.churchName ? ` · ${selected.churchName}` : ''}
+              {selected.location   ? ` · ${selected.location}`   : ''}
+              {' · Applied '}{new Date(selected.submittedAt).toLocaleDateString()}
+            </p>
 
             <div className="modal-section">
               <p className="modal-label">Bio</p>
@@ -484,7 +690,9 @@ export default function Admin() {
                 <p className="modal-label">Writing Samples</p>
                 <div className="modal-text">
                   {selected.writingSamples.map((url, i) => (
-                    <div key={i}><a href={url} target="_blank" rel="noopener" style={{ color: '#C9A94A' }}>{url}</a></div>
+                    <div key={i}>
+                      <a href={url} target="_blank" rel="noopener" style={{ color: '#C9A94A' }}>{url}</a>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -492,22 +700,61 @@ export default function Admin() {
 
             <div className="modal-divider" />
 
-            <p className="modal-reason-label">Note / Reason <span style={{ color: 'rgba(240,236,224,0.3)', fontWeight: 400 }}>(required for rejection)</span></p>
+            <p className="modal-reason-label">
+              Note / Reason{' '}
+              <span style={{ color: 'rgba(240,236,224,0.3)', fontWeight: 400 }}>(required for rejection)</span>
+            </p>
             <textarea
               className="modal-reason"
-              placeholder="Add a note for the applicant..."
+              placeholder="Add a note for the applicant…"
               value={reason}
               onChange={e => setReason(e.target.value)}
             />
 
             <div className="modal-actions">
               <button className="btn-approve" disabled={actionLoading} onClick={() => approve(selected.id)}>
-                {actionLoading ? 'Processing...' : '✓ Approve'}
+                {actionLoading ? 'Processing…' : 'Approve'}
               </button>
               <button className="btn-reject" disabled={actionLoading} onClick={() => reject(selected.id)}>
                 Reject
               </button>
               <button className="btn-cancel" onClick={() => setSelected(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Suspend article modal */}
+      {suspendTarget && (
+        <div
+          className="modal-overlay"
+          onClick={e => { if (e.target === e.currentTarget) setSuspendTarget(null) }}
+        >
+          <div className="modal">
+            <h2 className="modal-title">Suspend <em>article</em></h2>
+            <p className="modal-meta" style={{ marginBottom: 20 }}>"{suspendTarget.title}"</p>
+
+            <p className="modal-reason-label">
+              Reason{' '}
+              <span style={{ color: 'rgba(240,236,224,0.3)', fontWeight: 400 }}>(optional)</span>
+            </p>
+            <textarea
+              className="modal-reason"
+              placeholder="Why is this article being suspended?"
+              value={suspendReason}
+              onChange={e => setSuspendReason(e.target.value)}
+            />
+
+            <div className="modal-actions">
+              <button
+                className="btn-reject"
+                style={{ flex: 1 }}
+                disabled={suspendLoading}
+                onClick={suspendArticle}
+              >
+                {suspendLoading ? 'Suspending…' : 'Suspend article'}
+              </button>
+              <button className="btn-cancel" onClick={() => setSuspendTarget(null)}>Cancel</button>
             </div>
           </div>
         </div>
