@@ -10,7 +10,6 @@
 //     <AdminEmailTab getToken={getToken} />
 
 import { useEffect, useState } from 'react'
-import { useAuth } from '@clerk/clerk-react'
 import { apiFetch } from '../lib/api'
 
 type User = {
@@ -278,7 +277,6 @@ export default function AdminEmailTab({ getToken }: Props) {
                     >
                       <td>
                         <input
-                          title={`Select ${u.displayName ?? u.email}`}
                           type="checkbox"
                           className="et-checkbox"
                           checked={selected.has(u.id)}
@@ -308,7 +306,6 @@ export default function AdminEmailTab({ getToken }: Props) {
           <div>
             <label className="et-label">Email type</label>
             <select
-              title="Select email type"
               className="et-select"
               value={emailType}
               onChange={e => setEmailType(e.target.value)}
