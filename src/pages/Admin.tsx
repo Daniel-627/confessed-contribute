@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useAuth, useUser } from '@clerk/clerk-react'
 import { apiFetch } from '../lib/api'
 import AdminEmailTab from '../components/AdminEmailTab'
+import AdminResourcesTab from '../components/AdminResourcesTab'
 
 type Application = {
   id: string
@@ -43,7 +44,7 @@ type Article = {
   suspensionReason: string | null
 }
 
-type Tab = 'applications' | 'users' | 'articles' | 'emails'
+type Tab = 'applications' | 'users' | 'articles' | 'emails' | 'resources'
 
 const ROLES = ['regular', 'contributor', 'admin'] as const
 
@@ -75,8 +76,8 @@ export default function Admin() {
   const [suspendLoading, setSuspendLoading] = useState(false)
 
   async function load() {
-    // Emails tab manages its own data inside AdminEmailTab
-    if (tab === 'emails') { setLoading(false); return }
+    // Emails and Resources tabs manage their own data internally
+    if (tab === 'emails' || tab === 'resources') { setLoading(false); return }
 
     setLoading(true)
     try {
@@ -472,6 +473,12 @@ export default function Admin() {
             >
               Emails
             </button>
+            <button
+              className={`adm-tab${tab === 'resources' ? ' active' : ''}`}
+              onClick={() => setTab('resources')}
+            >
+              Resources
+            </button>
           </div>
         </div>
 
@@ -627,6 +634,9 @@ export default function Admin() {
                 </table>
               </div>
             )
+
+          ) : tab === 'resources' ? (
+            <AdminResourcesTab />
 
           ) : (
             // ── Emails tab ─────────────────────────────────────────────────
